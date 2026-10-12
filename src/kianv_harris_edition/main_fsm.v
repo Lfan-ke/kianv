@@ -255,7 +255,8 @@ module main_fsm (
     endcase
   end
 
-  assign ALUOutWrite = !mem_valid;
+  // AMO: the old value enters ALUOut in AMO_OP_WB and is written to rd only after the store has succeeded
+  assign ALUOutWrite = !mem_valid && state != AMO_OP_EXEC && state != AMO_OP_ADDR;
 
   always @(*) begin
     case (1'b1)
@@ -480,7 +481,7 @@ module main_fsm (
           is_store_unaligned: state_nxt = STORE_MISALIGN_0;
           access_fault:       state_nxt = STORE_FAULT_0;
           page_fault:         state_nxt = SPAGE_FAULT_0;
-          mem_ready:          state_nxt = FETCH;
+          mem_ready:          state_nxt = AMO_COMPLETE;
           default:            state_nxt = AMO_OP_WRITE;
         endcase
       end
@@ -785,8 +786,6 @@ module main_fsm (
         ALUOp     = `ALU_OP_ADD;
         ALUSrcA   = `SRCA_AMO_TEMP_DATA;
         ALUSrcB   = `SRCB_CONST_0;
-        ResultSrc = `RESULT_DATA;
-        RegWrite  = 1'b1;
       end
 
       AMO_OP_EXEC: begin
@@ -812,7 +811,9 @@ module main_fsm (
         mem_valid       = !is_store_unaligned;
       end
 
+      // not reached when the store faults: rd and memory are both untouched
       AMO_COMPLETE: begin
+        RegWrite  = 1'b1;
         mem_valid = 1'b1;
       end
 
